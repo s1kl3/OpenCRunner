@@ -34,6 +34,7 @@ OPT_RELEASE=llvm_v6
 OPT_TYPE=0
 OPT_PREFIX=0
 OPT_CPU=0
+OPT_WORKDIR=0
 OPT_CMAKE=0
 OPT_RUN_UNITTESTS=0
 OPT_RUN_BENCHS=0
@@ -49,8 +50,7 @@ ERROR="\e[1m\e[91mError!\e[0m"
 ################################################################################
 
 #### Git Repos #################################################################
-LLVM_REPO=https://git.llvm.org/git/llvm.git
-CLANG_REPO=https://git.llvm.org/git/clang.git
+LLVM_REPO=https://github.com/llvm/llvm-project.git
 OPENCRUN_REPO=https://github.com/s1kl3/OpenCRun
 
 SHOC_REPO=https://github.com/s1kl3/shoc
@@ -63,26 +63,29 @@ help() {
   echo -e "Usage:\t$0 build [ Build Options ]..."
   echo -e "   or:\t$0 test [Test Options]..."
   echo -e "   or:\t$0 bench [Benchmark Options]..."
-  echo -e "   ot:\t$0 plot"
+  echo -e "   or:\t$0 plot"
   echo -e "   or:\t$0 clean"
   echo -e "   or:\t$0 help\n"
+
+  echo -e "General Options:\n"
+  echo -e "\t[--workdir <path>]\t\tLocation for source trees and builds (default: $WORKDIR)\n"
 
   echo -e "Build Options (Install folder: $PREFIX):\n"
   echo -e "\t[--llvm_v3.7]\t\t\tBuild OpenCRun release for LLVM/Clang 3.7"
   echo -e "\t[--llvm_v3.5]\t\t\tBuild OpenCRun release for LLVM/Clang 3.5"
   echo -e "\t[--llvm_v6]\t\t\tBuild OpenCRun release for LLVM/Clang 6 (default)"
   echo -e "\t[--dev]\t\t\t\tBuild OpenCRun for the latest LLVM/Clang snapshot"
-  echo -e "\t[--type <build_type>]\t\tBuild type <Debug|Release|RelWithDebInfo|MinSizeRel>"
+  echo -e "\t[--type <build_type>]\t\tBuild type <Debug|Release|RelWithDebInfo|MinSizeRel> (default: Debug)"
   echo -e "\t[--prefix <install_prefix>]\tInstallation prefix (default: $HOME/local)"
   echo -e "\t[--cmake]\t\t\tBuild with CMake"
   echo -e "\t[--cpu <n>]\t\t\tUse n CPU cores for building (default: $NUM_CPU)\n"
 
-  echo -e "Test Options (Log folder: $LOGDIR/):\n"
+  echo -e "Test Options:\n"
   echo -e "\t[--unittests]\t\t\tRun OpenCRun unittests "
   echo -e "\t[--benchmarks]\t\t\tRun OpenCRun benchmarks"
   echo -e "\t[--cpu <n>]\t\t\tUse n CPU cores for running unittests (default: $NUM_CPU)\n"
 
-  echo -e "Benchmark Options (Log folder: $LOGDIR/):\n"
+  echo -e "Benchmark Options:\n"
   echo -e "\t[--amd]\t\t\t\tRun the AMD SDK benchmarks"
   echo -e "\t[--shoc]\t\t\tRun the SHOC benchmarks"
   echo -e "\t[--rodinia]\t\t\tRun the Rodinia benchmarks"
@@ -206,7 +209,7 @@ check_build_options() {
 }
 
 check_runtime() {
-  # This function is used by the "test" command to check wether the runtime DSO
+  # This function is used by the "test" command to check whether the runtime DSO
   # is installed or to set BUILD_TYPE and BUILDDIR variables according to the
   # OpenCRun build type specified with the "--type" option to the "build"
   # command.
@@ -282,15 +285,15 @@ clone_repos() {
   cd "$WORKDIR"
   case $OPT_RELEASE in
     llvm_v3.5)
-      BRANCH="release_35"
+      BRANCH="release/3.5.x"
       OPENCRUN_TAG="tags/$OPT_RELEASE"
       ;;
     llvm_v3.7)
-      BRANCH="release_37"
+      BRANCH="release/3.7.x"
       OPENCRUN_TAG="tags/$OPT_RELEASE"
       ;;
     llvm_v6)
-      BRANCH="release_60"
+      BRANCH="release/6.x"
       OPENCRUN_TAG="tags/$OPT_RELEASE"
       ;;
     dev)
@@ -303,30 +306,22 @@ clone_repos() {
       ;;
   esac
 
-  if ! [ -d llvm ]
+  if ! [ -d llvm-project ]
   then
     git clone $LLVM_REPO && \
-      cd llvm && \
+      cd llvm-project/llvm && \
+      git checkout $BRANCH && \
+      cd ../clang && \
       git checkout $BRANCH
   else
-    cd llvm
+    cd llvm-project/llvm
     git checkout master
     git branch | grep -q $BRANCH
     [ $? -eq 0 ] && git branch -f -d $BRANCH
     git pull origin
     git checkout $BRANCH
-  fi
-  STATUS=$?
-  [ $STATUS -ne 0 ] && exit 1
-  cd "$WORKDIR"
-  if ! [ -d llvm/tools/clang ]
-  then
-    cd llvm/tools && \
-      git clone $CLANG_REPO && \
-      cd clang && \
-      git checkout $BRANCH
-  else
-    cd llvm/tools/clang
+
+    cd ../clang
     git checkout master
     git branch | grep -q $BRANCH
     [ $? -eq 0 ] && git branch -f -d $BRANCH
@@ -370,45 +365,46 @@ clean() {
     rm -rf OpenCRun/$BUILDDIR
   fi
 
-  if [ -d llvm/$BUILDDIR ]
+  if [ -d llvm-project/$BUILDDIR ]
   then
-    cd llvm/$BUILDDIR
+    cd llvm-project/$BUILDDIR
     make uninstall
     cd "$WORKDIR"
-    rm -rf llvm/$BUILDDIR
+    rm -rf llvm-project/$BUILDDIR
   fi
 }
 
 build() {
   cd "$WORKDIR"
 
-  [ -d llvm/$BUILDDIR ] || mkdir llvm/$BUILDDIR
-  cd llvm/$BUILDDIR
+  [ -d llvm-project/$BUILDDIR ] || mkdir llvm-project/$BUILDDIR
+  cd llvm-project/$BUILDDIR
 
   if [ $OPT_CMAKE -eq 1 ]
   then
     cmake -G "Ninja" \
+      -DLLVM_ENABLE_PROJECTS=clang -G "Unix Makefiles" \
       -DCMAKE_INSTALL_PREFIX=$PREFIX \
       -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
       -DLLVM_ENABLE_RTTI:BOOL=1 \
       -DLLVM_PARALLEL_COMPILE_JOBS:STRING=$NUM_CPU \
       -DLLVM_PARALLEL_LINK_JOBS:STRING=1 \
-      .. && \
+      ../llvm && \
     cmake --build . && \
     cmake --build . --target install
     [ $? -ne 0 ] && exit 1 
   else
     if [ $BUILD_TYPE == Release ]
     then
-      ../configure --prefix="$PREFIX" --enable-optimized
+      ../llvm-project/configure --prefix="$PREFIX" --enable-optimized
     elif [ $BUILD_TYPE == MinSizeRel ]
     then
-      ../configure --prefix="$PREFIX" --enable-optimized --disable-assertions
+      ../llvm-project/configure --prefix="$PREFIX" --enable-optimized --disable-assertions
     elif [ $BUILD_TYPE == RelWithDebInfo ]
     then
-      ../configure --prefix="$PREFIX" --enable-optimized --enable-debug-symbols
+      ../llvm-project/configure --prefix="$PREFIX" --enable-optimized --enable-debug-symbols
     else
-      ../configure --prefix="$PREFIX"
+      ../llvm-project/configure --prefix="$PREFIX"
     fi
     [ $? -ne 0 ] && exit 1
     # So far C++ RTTI is used by OpenCRun
@@ -424,13 +420,13 @@ build() {
     cd "$WORKDIR/OpenCRun/$BUILDDIR" && \
       cmake .. \
       -DCMAKE_INSTALL_PREFIX=${HOME}/local \
-      -DLLVM_SRC_ROOT=${WORKDIR}/llvm \
-      -DLLVM_OBJ_ROOT=${WORKDIR}/llvm/$BUILDDIR && \
+      -DLLVM_SRC_ROOT=${WORKDIR}/llvm-project/llvm \
+      -DLLVM_OBJ_ROOT=${WORKDIR}/llvm-project/$BUILDDIR && \
       cmake --build . && \
       cmake --build . --target install
   else
     cd "$WORKDIR/OpenCRun/autoconf" && ./AutoRegen.sh && cd ../$BUILDDIR
-    ../configure --prefix="$PREFIX" --with-llvmsrc="$WORKDIR/llvm" --with-llvmobj="$WORKDIR/llvm/$BUILDDIR" && \
+    ../configure --prefix="$PREFIX" --with-llvmsrc="$WORKDIR/llvm-project/llvm" --with-llvmobj="$WORKDIR/llvm-project/$BUILDDIR" && \
       make -j$NUM_CPU && \
       make install
   fi
@@ -483,6 +479,8 @@ run_unittests() {
   fi
 
   UNITTESTS=(`find $UNITTESTS_DIR -type f -executable | sort`)
+
+  [ -d ${LOGDIR} ] || mkdir ${LOGDIR}
 
   [ -d ${LOGDIR}/Unittests ] || mkdir ${LOGDIR}/Unittests
 
@@ -619,7 +617,7 @@ run_amd() {
 
   cd $WORKDIR
 
-  PKG_TESTS=(`find $PKG_DIR/bin/ -type f -executable | sort`)
+  PKG_TESTS=(`find $PKG_DIR/build/bin/ -type f -executable | sort`)
 
   [ -d $LOGDIR ] || mkdir "$LOGDIR"
 
@@ -722,7 +720,7 @@ run_shoc() {
   if [ $RUNTIME == "opencrun" ]
   then
     LDFLAGS="-L$PREFIX/lib" CPPFLAGS="-I$PREFIX/include" \
-      ./configure --with-cuda=no --with-mpi=no &> /dev/null
+      ./configure --with-cuda=no --with-mpi=no --with-opencl=no &> /dev/null
   elif [ $RUNTIME == "intel" ]
   then
     LDFLAGS="-L/opt/intel/opencl-sdk/lib64" CPPFLAGS="-I/opt/intel/opencl-sdk/include" \
@@ -965,6 +963,12 @@ run_parboil() {
       -e 's/\(OPENCL_LIB_PATH=\).*/\1\$(OPENCL_PATH)\/lib\/x86_64/'
 
     VERSION="opencl_$RUNTIME"
+  fi
+
+  if ! [ -d "$PKG_DIR/datasets" ]
+  then
+    echo -e "\nMissing datasets! Download from http://impact.crhc.illinois.edu/parboil/parboil_download_page.aspx"
+    exit 1
   fi
 
   cd $PKG_DIR
@@ -1295,6 +1299,17 @@ do
       NUM_CPU=$2
       shift
       ;;
+    --workdir)
+      OPT_WORKDIR=1
+      WORKDIR=`realpath $2`
+      if ! [ -d $WORKDIR ]
+      then
+        echo "Error! Invalid working directory: '$WORKDIR'"
+	exit 1
+      fi
+      LOGDIR=$WORKDIR/log
+      shift
+      ;;
     --unittests)
       OPT_RUN_UNITTESTS=1
       ALL_TESTS=0
@@ -1388,6 +1403,15 @@ if [ $BENCH -eq 1 ]
 then
   set_env
   check_runtime
+
+  which time &> /dev/null
+  if [ $? -eq 1 ]
+  then
+      echo -e "${ERROR} Install the GNU time command"
+      exit 1
+  fi
+
+
   [ $OPT_RUN_AMD -eq 1 ] && run_amd
   [ $OPT_RUN_SHOC -eq 1 ] && run_shoc
   [ $OPT_RUN_RODINIA -eq 1 ] && run_rodinia
