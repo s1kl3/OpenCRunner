@@ -719,15 +719,15 @@ run_shoc() {
   echo -n "Building SHOC..."
   if [ $RUNTIME == "opencrun" ]
   then
-    LDFLAGS="-L$PREFIX/lib" CPPFLAGS="-I$PREFIX/include" \
+    LDFLAGS="-L$PREFIX/lib -L$WORKDIR/$PKG_DIR/src/opencrun/common" CPPFLAGS="-I$PREFIX/include" \
       ./configure --with-cuda=no --with-mpi=no --with-opencl=no &> /dev/null
   elif [ $RUNTIME == "intel" ]
   then
-    LDFLAGS="-L/opt/intel/opencl-sdk/lib64" CPPFLAGS="-I/opt/intel/opencl-sdk/include" \
+    LDFLAGS="-L/opt/intel/opencl-sdk/lib64 -L$WORKDIR/$PKG_DIR/src/opencl/common" CPPFLAGS="-I/opt/intel/opencl-sdk/include" \
       ./configure --with-cuda=no --with-mpi=no &> /dev/null
   elif [ $RUNTIME == "amd" ]
   then
-    LDFLAGS="-L/opt/AMDAPP/lib/x86_64" CPPFLAGS="-I/opt/AMDAPP/include" \
+    LDFLAGS="-L/opt/AMDAPP/lib/x86_64 -L$WORKDIR/$PKG_DIR/src/opencl/common" CPPFLAGS="-I/opt/AMDAPP/include" \
       ./configure --with-cuda=no --with-mpi=no &> /dev/null
   fi
   make -j$NUM_CPU &> /dev/null
