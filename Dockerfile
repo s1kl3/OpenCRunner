@@ -1,4 +1,4 @@
-# Docker image based on Debian stable with LLVM, Clang and the OpenCRun runtime
+# Docker image based on Debian Stretch with LLVM, Clang and the OpenCRun runtime
 # for OpenCL. It also downloads some benchmark packages.
 FROM debian:stretch
 MAINTAINER Giulio Sichel <Giulio.Sichel@gmail.com>
@@ -19,11 +19,16 @@ ARG BUILD_RELEASE=llvm_v6
 # Build type (Debug|Release|RelWithDebInfo|MinSizeRel)
 ARG BUILD_TYPE=RelWithDebInfo
 
-# Install dependencies and create the unpriviledged user "docker".
+# Execute as "root"
+USER root
+
+# Install dependencie, useful tools and create the unpriviledged user "docker".
 CMD ["echo","Download and installation of software dependencies"]
 RUN apt-get -y update \
-&& apt-get install -y build-essential cmake ninja-build git \
-&& apt-get install -y python hwloc libhwloc-dev libgl1-mesa-dev
+&& apt-get install -y apt-utils build-essential autoconf automake cmake ninja-build git \
+&& apt-get install -y python hwloc libhwloc-dev \
+&& apt-get install -y libgl1-mesa-dev libglew2.0 libglew-dev freeglut3 freeglut3-dev \
+&& apt-get install -y bash-completion time unzip ranger htop vim gnuplot ncdu
 
 # Switch to the "docker" user to execute commands.
 CMD ["echo","Switching to an unpriviledged user"]
